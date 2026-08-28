@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nigeria Customs Service | Customs Intelligence Management & Fusion Suite</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <!-- Top Classification & Header Banner -->
+  <div class="banner-restricted">RESTRICTED // OFFICIAL USE ONLY - NIGERIA CUSTOMS SERVICE INTELLIGENCE FUSION SUITE</div>
+
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="ncs-logo">NCS</div>
+      <div>
+        <h1>CUSTOMS INTELLIGENCE MANAGEMENT & FUSION SUITE</h1>
+        <div class="subtitle">Customs Intelligence Unit (CIU) | ICT-Modernization Department</div>
+      </div>
+    </div>
+    <div class="user-status-bar" id="user-status-bar">
+      <span id="user-info-text">Not Authenticated</span>
+      <button class="btn btn-secondary btn-sm" id="btn-login-modal">Login</button>
+      <button class="btn btn-outline btn-sm hidden" id="btn-logout">Logout</button>
+    </div>
+  </header>
+
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar-nav">
+      <div class="nav-section-title">PORTAL MODULES</div>
+      <a href="#" class="nav-link active" data-module="fusion">1. Fusion Centre</a>
+      <a href="#" class="nav-link" data-module="entities">2. Trader & Entity Profiling</a>
+      <a href="#" class="nav-link" data-module="cargo">3. Cargo Risk Profiling</a>
+      <a href="#" class="nav-link" data-module="reports">4. Field Intelligence</a>
+      <a href="#" class="nav-link" data-module="geospatial">5. Geospatial Intelligence</a>
+      <a href="#" class="nav-link" data-module="cases">6. Case Management</a>
+      <a href="#" class="nav-link" data-module="cyber">7. Cyber-Intelligence</a>
+      <a href="#" class="nav-link" data-module="interagency">8. Inter-Agency Portal</a>
+      <a href="#" class="nav-link" data-module="kpi">9. KPI & Rankings</a>
+      <a href="#" class="nav-link" data-module="ai">10. AI Prediction Engine</a>
+    </nav>
+
+    <!-- Main Content Workspace -->
+    <main class="main-content" id="main-content">
+      <!-- Dynamic Views Render Here -->
+    </main>
+  </div>
+
+  <!-- Login Modal -->
+  <div class="modal-backdrop hidden" id="login-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>NCS CIU Secure Authentication</h3>
+        <button class="close-modal" id="close-login-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-login">
+          <div class="form-group">
+            <label>Username / Service ID</label>
+            <input type="text" id="login-username" class="form-control" value="cgc_admin" required>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="login-password" class="form-control" value="Password123!" required>
+          </div>
+          <div class="form-group hidden" id="mfa-group">
+            <label>Multi-Factor Authentication (MFA) Code</label>
+            <input type="text" id="login-mfa" class="form-control" placeholder="Enter 6-digit MFA Code (Dev: 123456)">
+            <small class="text-muted">Enter verification code sent to secure authenticator.</small>
+          </div>
+          <div id="login-error" class="error-alert hidden"></div>
+          <button type="submit" class="btn btn-primary btn-block" id="btn-login-submit">Authenticate</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script src="/js/modules1to5.js"></script>
+  <script src="/js/modules6to10.js"></script>
+</body>
+</html>
