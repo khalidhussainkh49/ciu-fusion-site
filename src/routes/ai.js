@@ -3,7 +3,6 @@ const router = express.Router();
 const { getAsync, allAsync } = require('../db');
 const { authenticateToken, logAuditAction } = require('../middleware/auth');
 
-// POST /api/ai/predict-risk - AI Predictive Risk Scoring Model
 router.post('/predict-risk', authenticateToken, async (req, res) => {
   try {
     const { importer_name, agent_name, hs_code, declared_value, origin_country, route } = req.body;
@@ -26,9 +25,8 @@ router.post('/predict-risk', authenticateToken, async (req, res) => {
       risk_factors.push(`High monetary declaration value (NGN ${declared_value.toLocaleString()})`);
     }
 
-    // Check entity watchlist and historic cases
     if (importer_name) {
-      const entity = await getAsync("SELECT * FROM entity_profiles WHERE name LIKE ? AND watchlist_status = 'Active'", [`%${importer_name}%`]);
+      const entity = await getAsync("SELECT * FROM entity_profiles WHERE name ILIKE $1 AND watchlist_status = 'Active'", [`%${importer_name}%`]);
       if (entity) {
         risk_score += 35;
         risk_factors.push(`Importer match on Active CIU Watchlist (${entity.entity_code})`);
@@ -51,7 +49,6 @@ router.post('/predict-risk', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/ai/anomaly-detection - Detect valuation & routing anomalies
 router.get('/anomaly-detection', authenticateToken, async (req, res) => {
   try {
     const anomalousCargo = await allAsync('SELECT * FROM cargo_profiles WHERE declared_value > 30000000 AND risk_score >= 70');
@@ -68,7 +65,6 @@ router.get('/anomaly-detection', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/ai/generate-brief - Automated Intelligence Brief Generation
 router.post('/generate-brief', authenticateToken, async (req, res) => {
   try {
     const { topic, focus_area } = req.body;

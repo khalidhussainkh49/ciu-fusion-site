@@ -3,7 +3,6 @@ const router = express.Router();
 const { getAsync, allAsync } = require('../db');
 const { authenticateToken, logAuditAction } = require('../middleware/auth');
 
-// GET /api/fusion/overview
 router.get('/overview', authenticateToken, async (req, res) => {
   try {
     const totalReports = await getAsync('SELECT COUNT(*) as count FROM intelligence_reports');
@@ -21,12 +20,12 @@ router.get('/overview', authenticateToken, async (req, res) => {
 
     res.json({
       metrics: {
-        total_reports: totalReports.count,
-        pending_reports: pendingReports.count,
-        active_cases: activeCases.count,
-        watchlist_count: watchlistCount.count,
-        high_risk_cargo: highRiskCargo.count,
-        active_cyber_alerts: activeCyberAlerts.count
+        total_reports: parseInt(totalReports.count, 10),
+        pending_reports: parseInt(pendingReports.count, 10),
+        active_cases: parseInt(activeCases.count, 10),
+        watchlist_count: parseInt(watchlistCount.count, 10),
+        high_risk_cargo: parseInt(highRiskCargo.count, 10),
+        active_cyber_alerts: parseInt(activeCyberAlerts.count, 10)
       },
       recent_alerts: recentAlerts,
       recent_cases: recentCases,
@@ -37,7 +36,6 @@ router.get('/overview', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/fusion/briefs
 router.get('/briefs', authenticateToken, async (req, res) => {
   try {
     const period = req.query.period || 'daily';

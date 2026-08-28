@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { runAsync } = require('../db');
+const { query } = require('../db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ncs_ciu_fusion_secret_key_2026';
 
@@ -52,8 +52,8 @@ async function logAuditAction(req, action, module, details) {
       ip = req.ip || (req.socket && req.socket.remoteAddress) || (req.connection && req.connection.remoteAddress) || '127.0.0.1';
     }
 
-    await runAsync(
-      'INSERT INTO audit_logs (user_id, username, action, module, details, ip_address) VALUES (?, ?, ?, ?, ?, ?)',
+    await query(
+      'INSERT INTO audit_logs (user_id, username, action, module, details, ip_address) VALUES ($1, $2, $3, $4, $5, $6)',
       [userId, username, action, module, typeof details === 'object' ? JSON.stringify(details) : String(details), ip]
     );
   } catch (err) {

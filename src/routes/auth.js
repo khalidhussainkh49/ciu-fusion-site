@@ -4,7 +4,6 @@ const bcrypt = require('bcryptjs');
 const { getAsync, allAsync } = require('../db');
 const { generateToken, authenticateToken, logAuditAction } = require('../middleware/auth');
 
-// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -12,7 +11,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password required' });
     }
 
-    const user = await getAsync('SELECT * FROM users WHERE username = ?', [username]);
+    const user = await getAsync('SELECT * FROM users WHERE username = $1', [username]);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -52,7 +51,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/mfa
 router.post('/mfa', async (req, res) => {
   try {
     const { user_id, mfa_code } = req.body;
@@ -60,12 +58,11 @@ router.post('/mfa', async (req, res) => {
       return res.status(400).json({ error: 'User ID and MFA code required' });
     }
 
-    const user = await getAsync('SELECT * FROM users WHERE id = ?', [user_id]);
+    const user = await getAsync('SELECT * FROM users WHERE id = $1', [user_id]);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Default dev secret code verification
     if (mfa_code !== user.mfa_secret && mfa_code !== '123456') {
       return res.status(401).json({ error: 'Invalid MFA verification code' });
     }
@@ -90,17 +87,15 @@ router.post('/mfa', async (req, res) => {
   }
 });
 
-// GET /api/auth/me
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = await getAsync('SELECT id, username, full_name, service_number, role, clearance_level, command FROM users WHERE id = ?', [req.user.id]);
+    const user = await getAsync('SELECT id, username, full_name, service_number, role, clearance_level, command FROM users WHERE id = $1', [req.user.id]);
     res.json({ user });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/auth/users (for administrative selection)
 router.get('/users', authenticateToken, async (req, res) => {
   try {
     const users = await allAsync('SELECT id, username, full_name, service_number, role, clearance_level, command FROM users');

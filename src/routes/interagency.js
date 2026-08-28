@@ -1,9 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { runAsync, getAsync, allAsync } = require('../db');
+const { query, getAsync, allAsync } = require('../db');
 const { authenticateToken, requireClearance, logAuditAction } = require('../middleware/auth');
 
-// GET /api/interagency/requests - List requests
 router.get('/requests', authenticateToken, async (req, res) => {
   try {
     const requests = await allAsync('SELECT * FROM agency_requests ORDER BY created_at DESC');
@@ -13,7 +12,6 @@ router.get('/requests', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/interagency/requests - Initiate request to partner agency
 router.post('/requests', authenticateToken, requireClearance(2), async (req, res) => {
   try {
     const { requesting_agency, target_agency, subject, details } = req.body;
@@ -22,19 +20,20 @@ router.post('/requests', authenticateToken, requireClearance(2), async (req, res
     }
 
     const count = await getAsync('SELECT COUNT(*) as count FROM agency_requests');
-    const requestCode = `IAR-2026-${String(count.count + 1).padStart(4, '0')}`;
+    const requestCode = `IAR-2026-${String(parseInt(count.count, 10) + 1).padStart(4, '0')}`;
 
-    const result = await runAsync(
+    const result = await query(
       `INSERT INTO agency_requests (request_code, requesting_agency, target_agency, subject, details, status)
-       VALUES (?, ?, ?, ?, ?, 'Pending Approval')`,
+       VALUES ($1, $2, $3, $4, $5, 'Pending Approval') RETURNING id`,
       [requestCode, requesting_agency, target_agency, subject, details]
     );
 
-    await logAuditAction(req, 'CREATE_INTERAGENCY_REQUEST', 'Inter-Agency Collaboration', { request_id: result.lastID, request_code: requestCode });
+    const newId = result.rows[0].id;
+    await logAuditAction(req, 'CREATE_INTERAGENCY_REQUEST', 'Inter-Agency Collaboration', { request_id: newId, request_code: requestCode });
 
     res.status(201).json({
       message: 'Inter-agency intelligence request created successfully',
-      request_id: result.lastID,
+      request_id: newId,
       request_code: requestCode
     });
   } catch (err) {
@@ -42,7 +41,6 @@ router.post('/requests', authenticateToken, requireClearance(2), async (req, res
   }
 });
 
-// POST /api/interagency/share - Approve and submit response/sharing log
 router.post('/share', authenticateToken, requireClearance(3), async (req, res) => {
   try {
     const { request_id, status, response_summary } = req.body;
@@ -50,8 +48,8 @@ router.post('/share', authenticateToken, requireClearance(3), async (req, res) =
       return res.status(400).json({ error: 'Request ID, status, and response summary are required' });
     }
 
-    await runAsync(
-      'UPDATE agency_requests SET status = ?, response_summary = ? WHERE id = ?',
+    await query(
+      'UPDATE agency_requests SET status = $1, response_summary = $2 WHERE id = $3',
       [status, response_summary, request_id]
     );
 

@@ -1,21 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const { runAsync, getAsync, allAsync } = require('../db');
+const { query, getAsync, allAsync } = require('../db');
 const { authenticateToken, requireClearance, logAuditAction } = require('../middleware/auth');
 
-// GET /api/cyber/indicators - List digital threat indicators
 router.get('/indicators', authenticateToken, async (req, res) => {
   try {
     let sql = 'SELECT c.*, u.full_name as reporter_name FROM cyber_indicators c LEFT JOIN users u ON c.reported_by = u.id WHERE 1=1';
     const params = [];
+    let idx = 1;
 
     if (req.query.status) {
-      sql += ' AND c.validation_status = ?';
+      sql += ` AND c.validation_status = $${idx++}`;
       params.push(req.query.status);
     }
 
     if (req.query.category) {
-      sql += ' AND c.threat_category = ?';
+      sql += ` AND c.threat_category = $${idx++}`;
       params.push(req.query.category);
     }
 
@@ -27,7 +27,6 @@ router.get('/indicators', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/cyber/indicators - Report digital threat (fake website, phishing, leaked credentials)
 router.post('/indicators', authenticateToken, async (req, res) => {
   try {
     const { indicator_type, indicator_value, threat_category } = req.body;
@@ -36,19 +35,20 @@ router.post('/indicators', authenticateToken, async (req, res) => {
     }
 
     const count = await getAsync('SELECT COUNT(*) as count FROM cyber_indicators');
-    const indicatorCode = `CYB-IND-${202600 + count.count + 1}`;
+    const indicatorCode = `CYB-IND-${202600 + parseInt(count.count, 10) + 1}`;
 
-    const result = await runAsync(
+    const result = await query(
       `INSERT INTO cyber_indicators (indicator_code, indicator_type, indicator_value, threat_category, validation_status, reported_by)
-       VALUES (?, ?, ?, ?, 'Pending Review', ?)`,
+       VALUES ($1, $2, $3, $4, 'Pending Review', $5) RETURNING id`,
       [indicatorCode, indicator_type, indicator_value, threat_category, req.user.id]
     );
 
-    await logAuditAction(req, 'REPORT_CYBER_INDICATOR', 'Cyber Intelligence', { indicator_id: result.lastID, indicator_code: indicatorCode });
+    const newId = result.rows[0].id;
+    await logAuditAction(req, 'REPORT_CYBER_INDICATOR', 'Cyber Intelligence', { indicator_id: newId, indicator_code: indicatorCode });
 
     res.status(201).json({
       message: 'Cyber threat indicator logged for Cybersecurity Unit technical validation',
-      indicator_id: result.lastID,
+      indicator_id: newId,
       indicator_code: indicatorCode
     });
   } catch (err) {
@@ -56,7 +56,6 @@ router.post('/indicators', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/cyber/validate - Cybersecurity Unit validation workflow
 router.post('/validate', authenticateToken, requireClearance(3), async (req, res) => {
   try {
     const { indicator_id, validation_status, mitigation_outcome } = req.body;
@@ -64,8 +63,8 @@ router.post('/validate', authenticateToken, requireClearance(3), async (req, res
       return res.status(400).json({ error: 'Indicator ID, validation status, and mitigation outcome are required' });
     }
 
-    await runAsync(
-      'UPDATE cyber_indicators SET validation_status = ?, mitigation_outcome = ? WHERE id = ?',
+    await query(
+      'UPDATE cyber_indicators SET validation_status = $1, mitigation_outcome = $2 WHERE id = $3',
       [validation_status, mitigation_outcome, indicator_id]
     );
 

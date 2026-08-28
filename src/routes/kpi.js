@@ -3,7 +3,6 @@ const router = express.Router();
 const { getAsync, allAsync } = require('../db');
 const { authenticateToken, logAuditAction } = require('../middleware/auth');
 
-// GET /api/kpi/commands - Command ranking & performance KPIs
 router.get('/commands', authenticateToken, async (req, res) => {
   try {
     const commandStats = await allAsync(`
@@ -16,15 +15,18 @@ router.get('/commands', authenticateToken, async (req, res) => {
       ORDER BY total_reports DESC
     `);
 
-    // Add revenue recovery simulation & seizure metrics per command
-    const rankings = commandStats.map((cmd, idx) => ({
-      rank: idx + 1,
-      command: cmd.command,
-      total_reports: cmd.total_reports,
-      approved_reports: cmd.approved_reports,
-      productivity_score: Math.min(100, cmd.total_reports * 20 + cmd.approved_reports * 15),
-      est_revenue_recovered_ngn: cmd.approved_reports * 150000000
-    }));
+    const rankings = commandStats.map((cmd, idx) => {
+      const totalRpts = parseInt(cmd.total_reports, 10);
+      const appRpts = parseInt(cmd.approved_reports, 10);
+      return {
+        rank: idx + 1,
+        command: cmd.command,
+        total_reports: totalRpts,
+        approved_reports: appRpts,
+        productivity_score: Math.min(100, totalRpts * 20 + appRpts * 15),
+        est_revenue_recovered_ngn: appRpts * 150000000
+      };
+    });
 
     await logAuditAction(req, 'VIEW_COMMAND_KPI', 'KPI & Command Ranking', 'Viewed command performance leaderboard');
 
@@ -34,7 +36,6 @@ router.get('/commands', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/kpi/reports/monthly - Automated monthly report generator
 router.get('/reports/monthly', authenticateToken, async (req, res) => {
   try {
     const month = req.query.month || 'June 2026';
@@ -44,16 +45,21 @@ router.get('/reports/monthly', authenticateToken, async (req, res) => {
     const watchlistCount = await getAsync("SELECT COUNT(*) as count FROM entity_profiles WHERE watchlist_status = 'Active'");
     const redCargoCount = await getAsync("SELECT COUNT(*) as count FROM cargo_profiles WHERE selectivity_lane = 'Red'");
 
+    const totalRpts = parseInt(reportCount.count, 10);
+    const totalCases = parseInt(caseCount.count, 10);
+    const totalWatchlist = parseInt(watchlistCount.count, 10);
+    const totalRedCargo = parseInt(redCargoCount.count, 10);
+
     res.json({
       title: `Monthly Customs Intelligence Performance Report - ${month}`,
       generated_by: req.user.full_name,
       generated_at: new Date().toISOString(),
       summary_metrics: {
-        total_reports_submitted: reportCount.count,
-        investigation_cases_initiated: caseCount.count,
-        active_watchlist_entities: watchlistCount.count,
-        red_lane_targeted_consignments: redCargoCount.count,
-        estimated_revenue_protected_ngn: redCargoCount.count * 450000000
+        total_reports_submitted: totalRpts,
+        investigation_cases_initiated: totalCases,
+        active_watchlist_entities: totalWatchlist,
+        red_lane_targeted_consignments: totalRedCargo,
+        estimated_revenue_protected_ngn: totalRedCargo * 450000000
       },
       conclusion: 'Overall CIU intelligence output demonstrates high actionable impact across maritime ports and border corridors.'
     });

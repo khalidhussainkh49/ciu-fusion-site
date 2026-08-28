@@ -1,247 +1,221 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, '../data/fusion_suite.db');
+const connectionString = process.env.DATABASE_URL || 'postgresql://ncs_admin:ncs_secret_password_2026@localhost:5432/ncs_fusion_db';
 
-// Ensure directory exists if needed
-const fs = require('fs');
-const dir = path.dirname(dbPath);
-if (!fs.existsSync(dir)) {
-  fs.mkdirSync(dir, { recursive: true });
+const pool = new Pool({
+  connectionString
+});
+
+async function query(text, params) {
+  const start = Date.now();
+  const res = await pool.query(text, params);
+  return res;
 }
 
-const db = new sqlite3.Database(dbPath);
-
-function runAsync(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
+async function getAsync(text, params) {
+  const res = await pool.query(text, params);
+  return res.rows[0];
 }
 
-function getAsync(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
-}
-
-function allAsync(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+async function allAsync(text, params) {
+  const res = await pool.query(text, params);
+  return res.rows;
 }
 
 async function initDb() {
-  await runAsync('PRAGMA foreign_keys = ON');
-
   // Users & Roles
-  await runAsync(`
+  await query(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      full_name TEXT NOT NULL,
-      service_number TEXT UNIQUE NOT NULL,
-      role TEXT NOT NULL,
-      clearance_level INTEGER NOT NULL,
-      command TEXT NOT NULL,
-      mfa_enabled INTEGER DEFAULT 1,
-      mfa_secret TEXT DEFAULT '123456',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(100) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      full_name VARCHAR(150) NOT NULL,
+      service_number VARCHAR(100) UNIQUE NOT NULL,
+      role VARCHAR(100) NOT NULL,
+      clearance_level INT NOT NULL,
+      command VARCHAR(150) NOT NULL,
+      mfa_enabled INT DEFAULT 1,
+      mfa_secret VARCHAR(50) DEFAULT '123456',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
   // Intelligence Reports
-  await runAsync(`
+  await query(`
     CREATE TABLE IF NOT EXISTS intelligence_reports (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      report_number TEXT UNIQUE NOT NULL,
-      title TEXT NOT NULL,
-      category TEXT NOT NULL,
-      command TEXT NOT NULL,
-      location TEXT NOT NULL,
-      source_reliability TEXT NOT NULL,
-      information_credibility TEXT NOT NULL,
-      classification TEXT NOT NULL,
-      subject_entity TEXT,
-      commodity TEXT,
-      route_location TEXT,
+      id SERIAL PRIMARY KEY,
+      report_number VARCHAR(100) UNIQUE NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      category VARCHAR(100) NOT NULL,
+      command VARCHAR(150) NOT NULL,
+      location VARCHAR(200) NOT NULL,
+      source_reliability VARCHAR(100) NOT NULL,
+      information_credibility VARCHAR(100) NOT NULL,
+      classification VARCHAR(50) NOT NULL,
+      subject_entity VARCHAR(200),
+      commodity VARCHAR(200),
+      route_location VARCHAR(200),
       details TEXT NOT NULL,
       recommended_action TEXT,
       attachment_url TEXT,
-      status TEXT DEFAULT 'Submitted',
-      submitted_by INTEGER NOT NULL,
-      approved_by INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (submitted_by) REFERENCES users(id)
+      status VARCHAR(50) DEFAULT 'Submitted',
+      submitted_by INT REFERENCES users(id),
+      approved_by INT REFERENCES users(id),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // Entity Profiles & Watchlists
-  await runAsync(`
+  // Entity Profiles
+  await query(`
     CREATE TABLE IF NOT EXISTS entity_profiles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_code TEXT UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL,
-      tin_rc TEXT,
-      phone TEXT,
-      email TEXT,
+      id SERIAL PRIMARY KEY,
+      entity_code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(200) NOT NULL,
+      type VARCHAR(100) NOT NULL,
+      tin_rc VARCHAR(100),
+      phone VARCHAR(50),
+      email VARCHAR(100),
       address TEXT,
       directors TEXT,
-      risk_score INTEGER DEFAULT 0,
-      watchlist_status TEXT DEFAULT 'Inactive',
+      risk_score INT DEFAULT 0,
+      watchlist_status VARCHAR(50) DEFAULT 'Inactive',
       linked_agents TEXT,
       notes TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // Cargo Profiles & Selectivity Indicators
-  await runAsync(`
+  // Cargo Profiles
+  await query(`
     CREATE TABLE IF NOT EXISTS cargo_profiles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      paar_number TEXT UNIQUE NOT NULL,
-      form_m TEXT NOT NULL,
-      sgd_number TEXT NOT NULL,
-      manifest_number TEXT NOT NULL,
-      container_number TEXT NOT NULL,
-      vessel_name TEXT NOT NULL,
-      importer_name TEXT NOT NULL,
-      agent_name TEXT NOT NULL,
-      commodity TEXT NOT NULL,
-      hs_code TEXT NOT NULL,
-      declared_value REAL NOT NULL,
-      origin_country TEXT NOT NULL,
-      route TEXT NOT NULL,
-      risk_score INTEGER DEFAULT 0,
-      selectivity_lane TEXT DEFAULT 'Green',
+      id SERIAL PRIMARY KEY,
+      paar_number VARCHAR(100) UNIQUE NOT NULL,
+      form_m VARCHAR(100) NOT NULL,
+      sgd_number VARCHAR(100) NOT NULL,
+      manifest_number VARCHAR(100) NOT NULL,
+      container_number VARCHAR(100) NOT NULL,
+      vessel_name VARCHAR(150) NOT NULL,
+      importer_name VARCHAR(200) NOT NULL,
+      agent_name VARCHAR(200) NOT NULL,
+      commodity VARCHAR(200) NOT NULL,
+      hs_code VARCHAR(50) NOT NULL,
+      declared_value NUMERIC(15, 2) NOT NULL,
+      origin_country VARCHAR(100) NOT NULL,
+      route VARCHAR(200) NOT NULL,
+      risk_score INT DEFAULT 0,
+      selectivity_lane VARCHAR(50) DEFAULT 'Green',
       examination_note TEXT,
-      hold_recommended INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      hold_recommended INT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // Investigation & Case Management
-  await runAsync(`
+  // Case Files
+  await query(`
     CREATE TABLE IF NOT EXISTS case_files (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      case_number TEXT UNIQUE NOT NULL,
-      title TEXT NOT NULL,
-      category TEXT NOT NULL,
-      originating_report_id INTEGER,
-      assigned_officer_id INTEGER,
-      supervisor_id INTEGER,
-      status TEXT DEFAULT 'Active',
+      id SERIAL PRIMARY KEY,
+      case_number VARCHAR(100) UNIQUE NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      category VARCHAR(100) NOT NULL,
+      originating_report_id INT REFERENCES intelligence_reports(id),
+      assigned_officer_id INT REFERENCES users(id),
+      supervisor_id INT REFERENCES users(id),
+      status VARCHAR(50) DEFAULT 'Active',
       outcome TEXT,
       closure_report TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (originating_report_id) REFERENCES intelligence_reports(id),
-      FOREIGN KEY (assigned_officer_id) REFERENCES users(id)
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
   // Evidence Register
-  await runAsync(`
+  await query(`
     CREATE TABLE IF NOT EXISTS case_evidence (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      case_id INTEGER NOT NULL,
+      id SERIAL PRIMARY KEY,
+      case_id INT REFERENCES case_files(id),
       item_description TEXT NOT NULL,
-      evidence_type TEXT NOT NULL,
-      custodian TEXT NOT NULL,
-      date_seized DATETIME DEFAULT CURRENT_TIMESTAMP,
-      status TEXT DEFAULT 'Secured',
-      FOREIGN KEY (case_id) REFERENCES case_files(id)
+      evidence_type VARCHAR(100) NOT NULL,
+      custodian VARCHAR(150) NOT NULL,
+      date_seized TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      status VARCHAR(50) DEFAULT 'Secured'
     )
   `);
 
   // Case Tasks
-  await runAsync(`
+  await query(`
     CREATE TABLE IF NOT EXISTS case_tasks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      case_id INTEGER NOT NULL,
-      task_title TEXT NOT NULL,
-      assigned_to INTEGER NOT NULL,
-      due_date TEXT NOT NULL,
-      status TEXT DEFAULT 'Pending',
-      FOREIGN KEY (case_id) REFERENCES case_files(id),
-      FOREIGN KEY (assigned_to) REFERENCES users(id)
+      id SERIAL PRIMARY KEY,
+      case_id INT REFERENCES case_files(id),
+      task_title VARCHAR(255) NOT NULL,
+      assigned_to INT REFERENCES users(id),
+      due_date VARCHAR(50) NOT NULL,
+      status VARCHAR(50) DEFAULT 'Pending'
     )
   `);
 
-  // Cyber Indicators & Threats
-  await runAsync(`
+  // Cyber Indicators
+  await query(`
     CREATE TABLE IF NOT EXISTS cyber_indicators (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      indicator_code TEXT UNIQUE NOT NULL,
-      indicator_type TEXT NOT NULL,
-      indicator_value TEXT NOT NULL,
-      threat_category TEXT NOT NULL,
-      validation_status TEXT DEFAULT 'Pending Review',
+      id SERIAL PRIMARY KEY,
+      indicator_code VARCHAR(100) UNIQUE NOT NULL,
+      indicator_type VARCHAR(100) NOT NULL,
+      indicator_value VARCHAR(255) NOT NULL,
+      threat_category VARCHAR(100) NOT NULL,
+      validation_status VARCHAR(50) DEFAULT 'Pending Review',
       mitigation_outcome TEXT,
-      reported_by INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (reported_by) REFERENCES users(id)
+      reported_by INT REFERENCES users(id),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // Inter-Agency Collaboration
-  await runAsync(`
+  // Inter-Agency Requests
+  await query(`
     CREATE TABLE IF NOT EXISTS agency_requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      request_code TEXT UNIQUE NOT NULL,
-      requesting_agency TEXT NOT NULL,
-      target_agency TEXT NOT NULL,
-      subject TEXT NOT NULL,
+      id SERIAL PRIMARY KEY,
+      request_code VARCHAR(100) UNIQUE NOT NULL,
+      requesting_agency VARCHAR(150) NOT NULL,
+      target_agency VARCHAR(150) NOT NULL,
+      subject VARCHAR(255) NOT NULL,
       details TEXT NOT NULL,
-      status TEXT DEFAULT 'Pending Approval',
+      status VARCHAR(50) DEFAULT 'Pending Approval',
       response_summary TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // Smuggling Routes & Geospatial Hotspots
-  await runAsync(`
+  // Geospatial Routes
+  await query(`
     CREATE TABLE IF NOT EXISTS geospatial_routes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      route_name TEXT NOT NULL,
-      origin_location TEXT NOT NULL,
-      destination_location TEXT NOT NULL,
-      risk_level TEXT NOT NULL,
-      seizure_count INTEGER DEFAULT 0,
+      id SERIAL PRIMARY KEY,
+      route_name VARCHAR(150) NOT NULL,
+      origin_location VARCHAR(150) NOT NULL,
+      destination_location VARCHAR(150) NOT NULL,
+      risk_level VARCHAR(50) NOT NULL,
+      seizure_count INT DEFAULT 0,
       vulnerability_notes TEXT,
-      latitude REAL,
-      longitude REAL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      latitude NUMERIC(10, 6),
+      longitude NUMERIC(10, 6),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
   // Audit Logs
-  await runAsync(`
+  await query(`
     CREATE TABLE IF NOT EXISTS audit_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      username TEXT,
-      action TEXT NOT NULL,
-      module TEXT NOT NULL,
+      id SERIAL PRIMARY KEY,
+      user_id INT,
+      username VARCHAR(100),
+      action VARCHAR(100) NOT NULL,
+      module VARCHAR(100) NOT NULL,
       details TEXT,
-      ip_address TEXT DEFAULT '127.0.0.1',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      ip_address VARCHAR(50) DEFAULT '127.0.0.1',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
   // Seed default users if empty
   const userCount = await getAsync('SELECT COUNT(*) as count FROM users');
-  if (userCount.count === 0) {
+  if (parseInt(userCount.count, 10) === 0) {
     const defaultPassword = await bcrypt.hash('Password123!', 10);
     const usersToSeed = [
       { username: 'cgc_admin', name: 'Comptroller-General', service: 'NCS/CGC/001', role: 'Head of CIU', clearance: 5, command: 'HQ Abuja' },
@@ -252,17 +226,17 @@ async function initDb() {
     ];
 
     for (const u of usersToSeed) {
-      await runAsync(
-        'INSERT INTO users (username, password_hash, full_name, service_number, role, clearance_level, command) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      await query(
+        'INSERT INTO users (username, password_hash, full_name, service_number, role, clearance_level, command) VALUES ($1, $2, $3, $4, $5, $6, $7)',
         [u.username, defaultPassword, u.name, u.service, u.role, u.clearance, u.command]
       );
     }
   }
 
-  // Seed sample initial data
+  // Seed initial sample data if empty
   const reportCount = await getAsync('SELECT COUNT(*) as count FROM intelligence_reports');
-  if (reportCount.count === 0) {
-    await runAsync(`
+  if (parseInt(reportCount.count, 10) === 0) {
+    await query(`
       INSERT INTO intelligence_reports
       (report_number, title, category, command, location, source_reliability, information_credibility, classification, subject_entity, commodity, route_location, details, recommended_action, status, submitted_by)
       VALUES
@@ -271,24 +245,24 @@ async function initDb() {
   }
 
   const entityCount = await getAsync('SELECT COUNT(*) as count FROM entity_profiles');
-  if (entityCount.count === 0) {
-    await runAsync(`
+  if (parseInt(entityCount.count, 10) === 0) {
+    await query(`
       INSERT INTO entity_profiles (entity_code, name, type, tin_rc, phone, email, address, directors, risk_score, watchlist_status, linked_agents)
       VALUES ('ENT-9021', 'Globo Import Ltd', 'Company', 'RC-8849201', '+2348030001122', 'info@globoimport.ng', '12 Commercial Rd, Apapa', 'John Doe, Usman Ali', 85, 'Active', 'Swift Logistics Ltd')
     `);
   }
 
   const cargoCount = await getAsync('SELECT COUNT(*) as count FROM cargo_profiles');
-  if (cargoCount.count === 0) {
-    await runAsync(`
+  if (parseInt(cargoCount.count, 10) === 0) {
+    await query(`
       INSERT INTO cargo_profiles (paar_number, form_m, sgd_number, manifest_number, container_number, vessel_name, importer_name, agent_name, commodity, hs_code, declared_value, origin_country, route, risk_score, selectivity_lane, examination_note, hold_recommended)
       VALUES ('PAAR-2026-88392', 'M-994820', 'SGD-AP-2026-0091', 'MNF-88402', 'MSKU9930214', 'MV OCEAN STAR', 'Globo Import Ltd', 'Swift Logistics Ltd', 'Excavators & Spare Parts', '8429.52.00', 45000000.00, 'China', 'Ningbo - Apapa', 88, 'Red', 'Conduct 100% physical examination for undervaluation and unmanifested goods.', 1)
     `);
   }
 
   const routeCount = await getAsync('SELECT COUNT(*) as count FROM geospatial_routes');
-  if (routeCount.count === 0) {
-    await runAsync(`
+  if (parseInt(routeCount.count, 10) === 0) {
+    await query(`
       INSERT INTO geospatial_routes (route_name, origin_location, destination_location, risk_level, seizure_count, vulnerability_notes, latitude, longitude)
       VALUES
       ('Seme Unapproved Bush Corridor', 'Seme Border', 'Badagry', 'Critical', 14, 'Frequent night movements of smuggled foreign rice and petroleum products.', 6.3833, 2.7167),
@@ -298,9 +272,9 @@ async function initDb() {
 }
 
 module.exports = {
-  db,
-  initDb,
-  runAsync,
+  pool,
+  query,
   getAsync,
-  allAsync
+  allAsync,
+  initDb
 };
